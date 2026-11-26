@@ -1,0 +1,16 @@
+{
+  "version": "editorial-v1.0",
+  "timezone": "Asia/Shanghai",
+  "weights": {"relevance":25,"timeliness":30,"evidence":20,"impact":15,"novelty":10},
+  "featured_min": 80,
+  "recent_min": 65,
+  "relevance_min": 3,
+  "minimum_content_chars": 120,
+  "recent_hours": 72,
+  "tracking_days": 7,
+  "max_future_skew_minutes": 5,
+  "max_featured": 10,
+  "max_recent": 20,
+  "max_ongoing": 3,
+  "ai": {"enabled":false,"max_items_per_run":2,"max_calls_per_run":4,"context_chars_per_article":5000,"max_context_chars_per_item":6000,"max_output_tokens":1800,"estimated_token_upper_limit":64000,"timeout_seconds":30}
+}

@@ -1,0 +1,25 @@
+# Private state and generated files
+data/
+logs/
+.runtime/
+.cache/
+**/node_modules/
+**/.data/
+**/dist/
+**/.nitro/
+**/output/
+**/__pycache__/
+**/.pytest_cache/
+**/*.pyc
+**/*.sqlite3
+**/*.sqlite3-*
+**/*.db
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.sample
+**/admin-key.txt
+**/*.pem
+**/*.key
+*.zip
+!web/pnpm-lock.yaml

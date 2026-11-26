@@ -1,0 +1,175 @@
+{
+  "scope": "Complete local reader portal, collection/storage/processing, optional source-grounded AI editorial pipeline, manual picks, local administration and in-service scheduling; live model not configured; no public hosting.",
+  "upstream": [
+    {
+      "name": "NewsNow",
+      "commit": "5da836c49c327f2c352216c5cbb4dea1abd9fcd3",
+      "usage": "Whole web project and source adapters; existing db0/better-sqlite3 dependencies"
+    },
+    {
+      "name": "TrendRadar",
+      "commit": "ad2221fae0d908f6c11f40f70680dd5f9b41cd5d",
+      "usage": "Original DataFetcher.fetch_data, RSSFetcher.fetch_feed, RSSParser and ArticleReaderTools.read_article"
+    },
+    {
+      "name": "Trafilatura",
+      "version": "2.4.0",
+      "usage": "Existing main-text extractor as fallback when upstream Jina reader is unavailable",
+      "license": "Apache-2.0",
+      "url": "https://github.com/adbar/trafilatura"
+    },
+    {
+      "name": "RapidFuzz",
+      "version": "3.14.6",
+      "usage": "fuzz.ratio and process.extract for title candidate retrieval",
+      "license": "MIT",
+      "url": "https://github.com/rapidfuzz/RapidFuzz"
+    }
+  ],
+  "new_code": "Integration adapters, storage/import/query, derived processing, editorial policy and validation, digest history, local orchestration and tests",
+  "reference_only": [
+    "zenfeed",
+    "Folo"
+  ],
+  "licenses": "Retain original LICENSE files; collector imports GPL TrendRadar code. See vendor/TrendRadar/LICENSE and web/LICENSE.",
+  "reused_python_symbols": [
+    {
+      "path": "trendradar/crawler/fetcher.py",
+      "symbols": [
+        "DataFetcher.fetch_data"
+      ],
+      "sha256": "892ceac40f013727498463f118790a76342df7191f442185d880ef77297eba67"
+    },
+    {
+      "path": "trendradar/crawler/rss/fetcher.py",
+      "symbols": [
+        "RSSFetcher.fetch_feed",
+        "RSSFeedConfig"
+      ],
+      "sha256": "25af4d9ca0862709dec55990442a71015fdb41e106f8e3110a8a8635c797a658"
+    },
+    {
+      "path": "trendradar/crawler/rss/parser.py",
+      "symbols": [
+        "RSSParser.parse",
+        "RSSParser._parse_entry",
+        "RSSParser._clean_text"
+      ],
+      "sha256": "fd8990ab380f41c74944e74c7912f2d0ad39be49b8a79a3620dd8a88fd8f5057"
+    },
+    {
+      "path": "mcp_server/tools/article_reader.py",
+      "symbols": [
+        "ArticleReaderTools.read_article"
+      ],
+      "sha256": "4624d64ae2e2e94e689b2f945d402590795a325301793ed0b707f1245abbfc53"
+    },
+    {
+      "path": "trendradar/core/frequency.py",
+      "symbols": [
+        "matches_word_groups"
+      ],
+      "sha256": "c40420d7000cf405420afcf1b22ddf3394b06022da8a0ba87a03db77250141eb"
+    },
+    {
+      "path": "trendradar/ai/filter.py",
+      "symbols": [
+        "AIFilter.classify_batch",
+        "AIFilter._parse_classify_response",
+        "AIFilter._extract_json"
+      ],
+      "sha256": "76e28cd4a3057f11f3058f790cfc6a0c73dc83cabef4eb839acc7fe0660ea47e"
+    },
+    {
+      "path": "trendradar/ai/client.py",
+      "symbols": [
+        "AIClient.chat"
+      ],
+      "sha256": "59ffe5fe7f23140773a3552906bcf96990b230c39836cc495d7eeaa8146681fa"
+    },
+    {
+      "path": "trendradar/ai/prompt_loader.py",
+      "symbols": [
+        "load_prompt_template"
+      ],
+      "sha256": "0df763b70092c704426c040db368643756ef453fc5352ede8018fc3ac80babd0"
+    }
+  ],
+  "new_files": [
+    "collector/collect.py",
+    "web/shared/content.ts",
+    "web/server/database/content.ts",
+    "web/scripts/import-content.ts",
+    "web/server/api/content/",
+    "run.ps1",
+    "start-web.ps1",
+    "collector/process_content.py",
+    "collector/editorialize.py",
+    "web/shared/editorial.ts",
+    "web/server/database/editorial.ts",
+    "web/server/utils/editorial-policy.ts",
+    "web/scripts/editorial-content.ts",
+    "editorialize.ps1",
+    "EDITORIAL.md"
+  ],
+  "dependency_layout": {
+    "node_modules": "Installed locally with the committed web/pnpm-lock.yaml; no dependency directory is committed",
+    "python": "Repository-local .runtime/python-env, installed from collector/requirements.lock.txt and vendored TrendRadar"
+  },
+  "processing": {
+    "rule_config": "config/processing.json",
+    "code": "collector/process_content.py",
+    "database": "web/server/database/processing.ts",
+    "public_api": "read-only /api/content/*",
+    "manual_corrections": "local CLI only, audited and reversible",
+    "zenfeed": "grouping design reference only; no Go code copied"
+  },
+  "editorial": {
+    "worker": "collector/editorialize.py",
+    "reused": [
+      "TrendRadar AIClient.chat",
+      "TrendRadar load_prompt_template",
+      "TrendRadar AIFilter._extract_json",
+      "existing atomic_json/digest helpers",
+      "NewsNow db0/better-sqlite3"
+    ],
+    "policy": "config/editorial.json",
+    "prompts": [
+      "config/editorial-writer.txt",
+      "config/editorial-checker.txt"
+    ],
+    "database": "web/server/database/editorial.ts",
+    "policy_code": "web/server/utils/editorial-policy.ts",
+    "entrypoint": "editorialize.ps1, called after process.ps1 by run.ps1",
+    "model_state": "not_configured; no real model request or production AI analysis",
+    "additional_dependencies": []
+  },
+  "portal": {
+    "entry": "web/src/components/portal/",
+    "direct_ui_reuse": [
+      "NewsNow source CardWrapper",
+      "TanStack Router and React Query already in NewsNow",
+      "NewsNow PWA lifecycle and toast"
+    ],
+    "management": "web/server/api/admin/[...path].ts + services/operations.ts",
+    "local_only": true,
+    "schedule": "server/plugins/portal.ts; fixed existing PowerShell entrypoints",
+    "deep_links": "server/middleware/portal-pages.ts + server/routes/[...path].ts",
+    "launch": [
+      "启动网站.cmd",
+      "打开管理.cmd",
+      "停止网站.cmd"
+    ],
+    "additional_dependencies": [],
+    "upstream_changes": "No vendor/TrendRadar source edits; NewsNow integration, metadata and routes modified locally."
+  },
+  "distribution": {
+    "installer": "setup.ps1",
+    "runtime_state": "Excluded from Git; generated per installation",
+    "original_data": "Not distributed",
+    "credentials": "Not distributed",
+    "target": "Windows 10/11, Node.js 24, Python 3.12",
+    "upstream_output_databases": "Excluded",
+    "sanitized_upstream_docs": "Slack webhook example URLs replaced with placeholders for GitHub push protection; reused Python source files and license texts unchanged."
+  }
+}

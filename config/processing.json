@@ -1,0 +1,92 @@
+{
+  "rules_version": "clean-classify-v1.1",
+  "candidate_title_score": 78,
+  "candidate_days": 7,
+  "same_event_days": 3,
+  "minimum_duplicate_body_chars": 400,
+  "max_candidates_per_article": 12,
+  "ai": {
+    "enabled": false,
+    "batch_size": 12,
+    "max_classification_calls": 2,
+    "max_pair_calls": 1,
+    "timeout_seconds": 30
+  },
+  "types": {
+    "tutorial": {
+      "label": "教程",
+      "pattern": "教程|入门|手把手|从零|实战|指南|如何|\\bhow to\\b|\\btutorial\\b|\\bguide\\b|from scratch|\\bbuild(?:ing)?\\b.{0,35}\\b(?:python|app|agent|harness)\\b|\\b(?:exercises?|quizzes?|quiz|porting|walkthrough)\\b|练习|动手实现"
+    },
+    "review": {
+      "label": "测评",
+      "pattern": "评测|测评|横评|实测|\\bhands.on\\b|^review(?:[:： ]|$)|\\breview of\\b|\\breview$|performance test|性能测试"
+    },
+    "news": {
+      "label": "新闻",
+      "pattern": "发布|推出|上线|宣布|更新|修复|披露|曝出|漏洞|收购|融资|起诉|\\bintroduc(?:e[sd]?|ing)\\b|\\breleas(?:e[sd]?|ing)\\b|\\blaunch(?:ed|es|ing)?\\b|\\bunveil(?:s|ed)?\\b|\\bannounc(?:e[sd]?|ing)\\b|\\bpatch(?:es|ed)?\\b|\\bCVE-\\d{4}-\\d+\\b|开始|计划|有望|将于|获批|确认|透露|被曝|达成|即将|停止|关闭|开放|扩展|新增|支持|接入|默认|涨价|降价|推迟|签署|完成|首款|首个|首次|发现|周报|日报|速递|\\b(?:now|adds?|added|available|supports?|enables?|will|plans?|begins?|joins?|warns?|fined|sues|suspends?|newsletter|weekly)\\b|public preview|release candidate|解决|预计|开售|预售|指责|回应|突破|曝光|\\bsecurity incident\\b"
+    },
+    "knowledge": {
+      "label": "知识",
+      "pattern": "原理|什么是|知识|详解|理解|解读|\\bunderstanding\\b|\\bexplained\\b|\\bwhat is\\b|\\bintroduction to\\b|\\bdeep dive\\b|\\bexploring\\b|^how\\b(?! to )|\\bin depth\\b"
+    },
+    "tool": {
+      "label": "工具",
+      "pattern": "工具|框架|开源库|\\btool(?:kit)?\\b|\\blibrary\\b|\\bframework\\b|\\bCLI\\b|\\bSDK\\b"
+    }
+  },
+  "topics": {
+    "ai": {
+      "label": "人工智能",
+      "pattern": "人工智能|大模型|机器学习|神经网络|\\b(?:ai|llm|gpt|claude|gemini|llama|deepseek|openai|anthropic|pytorch|tensorflow|chatgpt)\\b|\\bneural\\b|\\bagents?\\b|\\bLLMs?\\b|Qwen|通义|千问|(?<![A-Za-z0-9_])AI(?![A-Za-z0-9_])"
+    },
+    "hardware": {
+      "label": "芯片与硬件",
+      "pattern": "芯片|显卡|处理器|半导体|内存|存储器|\\b(?:gpu|cpu|nvidia|amd|intel|rtx|chip|chips|processor|semiconductor|dram|ssd)\\b|英伟达|英特尔|迷你主机|机箱|散热|海力士|\\b(?:PS5|Switch 2|PC|Rockbox)\\b|显示器|显存|主板|固态硬盘|内存条|硬盘|路由器|显示面板|OLED|USB"
+    },
+    "systems": {
+      "label": "系统与基础软件",
+      "pattern": "操作系统|内核|浏览器|编译器|运行时|\\b(?:linux|windows|macos|ipados|android|ios|kernel|compiler|browser|firefox|chromium)\\b|鸿蒙(?:OS|系统)|HarmonyOS|\\b(?:PipeWire|nginx)\\b"
+    },
+    "software": {
+      "label": "软件与开源",
+      "pattern": "开源|软件|开发工具|代码|编程|\\b(?:github|git|python|javascript|typescript|rust|golang|vscode|sdk|software|programming)\\b|c\\+\\+|c#|\\.net\\b|游戏|玩家|\\b(?:GTA6?|Steam|Unity|Unreal|PlayStation)\\b"
+    },
+    "networks": {
+      "label": "网络与云",
+      "pattern": "云计算|网络|数据中心|分布式|\\b(?:cloudflare|cloud|network|networking|kubernetes|docker|aws|azure|cdn|dns|http|tcp)\\b"
+    },
+    "databases": {
+      "label": "数据库与数据技术",
+      "pattern": "数据库|数据仓库|数据处理|\\b(?:database|postgresql|postgres|mysql|redis|sqlite|mongodb|clickhouse|duckdb|spark|kafka)\\b"
+    },
+    "security": {
+      "label": "网络安全",
+      "pattern": "漏洞|网络攻击|安全更新|数据泄露|勒索|\\b(?:security|vulnerability|vulnerabilities|exploit|ransomware|breach|CVE-\\d{4}-\\d+)\\b"
+    },
+    "research": {
+      "label": "学术与前沿",
+      "pattern": "论文|研究|量子计算|量子比特|形式化|数学证明|黎曼|\\b(?:research|paper|arxiv|quantum|theorem|proof|riemann|formalization)\\b|算法|矩阵|\\b(?:algorithm|multiplication)\\b|\\bpapers\\b"
+    },
+    "industry": {
+      "label": "产业与标准",
+      "pattern": "收购|融资|标准|监管|裁员|上市|诉讼|\\b(?:acquisition|funding|regulation|standard|lawsuit|ipo|layoffs)\\b"
+    }
+  },
+  "entities": {
+    "openai": "openai|chatgpt",
+    "anthropic": "anthropic|claude",
+    "google": "google|谷歌|gemini",
+    "nvidia": "nvidia|英伟达|rtx",
+    "amd": "\\bamd\\b|radeon",
+    "apple": "apple|苹果|macos|ipados",
+    "microsoft": "microsoft|微软|windows",
+    "python": "\\bpython\\b",
+    "linux": "\\blinux\\b",
+    "postgresql": "postgresql|postgres",
+    "mysql": "\\bmysql\\b",
+    "redis": "\\bredis\\b",
+    "kubernetes": "\\bkubernetes\\b",
+    "cloudflare": "cloudflare",
+    "mozilla": "mozilla|firefox"
+  }
+}
