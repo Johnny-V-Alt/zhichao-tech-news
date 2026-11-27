@@ -231,7 +231,7 @@ def collect_source(source, config, raw_dir):
     return run, articles
 
 
-def read_with_trafilatura(url, allowed_hosts):
+def read_with_trafilatura(url, allowed_hosts, minimum_chars=120):
     """Small HTTP adapter; all main-text extraction is the third-party library."""
     original_url = url
     try:
@@ -254,7 +254,7 @@ def read_with_trafilatura(url, allowed_hosts):
                         raise ValueError("Page exceeds body download limit")
                     chunks.append(chunk)
             text = trafilatura.extract(b"".join(chunks), url=url, output_format="txt", include_comments=False, favor_precision=True)
-            if not text or len(text.strip()) < 200:
+            if not text or len(text.strip()) < minimum_chars:
                 raise ValueError("No sufficient main text found")
             return {"success":True,"data":{"url":url,"content":text,"provider":"trafilatura"}}
         raise ValueError("Too many publisher redirects")

@@ -21,3 +21,10 @@ No upstream LICENSE or copyright notice was removed. New integration code is ide
 - RSSNext/Folo, commit 292d15d94f9e7680899e1e2567c1c0d48a423f48, AGPL-3.0: ArticleItemStateLess source/time/title/description layout adapted in web/src/components/portal/upstream/folo-article-item.tsx. MainDestopLayout is a three-column design reference; its authentication/store code is not transplanted. Original pinned files and LICENSE retained in vendor/frontend/folo/.
 - Local changes translate upstream utility classes to portal CSS, use the existing content API and bookmark store, replace service-specific hooks with props, and add responsive navigation. No Folo icons/mgc assets, daily.dev brand artwork, advertisements, analytics or third-party backend integrations are included.
 - The redesigned web/src/components/portal frontend is AGPL-3.0-only. LICENSE-AGPL-3.0 contains the full text. Existing MIT NewsNow and GPLv3 collector source remain under their respective licenses. The site footer links to the public project source; source snapshots and hashes are listed in vendor/frontend/provenance.json.
+
+## Huey
+
+- Upstream: https://github.com/coleifer/huey
+- Version: 3.5.4, installed from PyPI and pinned in collector requirements.
+- License: MIT; original text retained in `vendor/huey/LICENSE`.
+- Direct reuse: SqliteHuey native task serialization, priority queue, SQLite persistence, delayed scheduling, retry/backoff, dequeue and execute APIs. Local code only integrates article eligibility, extraction status and the existing outbox importer. No Huey source modifications and no Redis dependency.

@@ -1,4 +1,4 @@
-﻿param([Parameter(Mandatory=$true)][ValidatePattern('^[a-f0-9]{24}$')][string]$JobId, [Parameter(Mandatory=$true)][ValidateSet('collect','process','editorial')][string]$Kind)
+﻿param([Parameter(Mandatory=$true)][ValidatePattern('^[a-f0-9]{24}$')][string]$JobId, [Parameter(Mandatory=$true)][ValidateSet('collect','process','editorial','backfill')][string]$Kind)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $operationsRoot = Join-Path $projectRoot 'data\operations'
@@ -13,8 +13,10 @@ $job.pid = $PID
 Save-Job
 $nativeExit = 1
 try {
-    $scriptName = @{collect='run.ps1';process='process.ps1';editorial='editorialize.ps1'}[$Kind]
-    & (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -File (Join-Path $projectRoot $scriptName)
+    $scriptName = @{collect='run.ps1';process='process.ps1';editorial='editorialize.ps1';backfill='backfill.ps1'}[$Kind]
+    $extraArguments = @()
+    if ($Kind -eq 'backfill' -and $job.trigger -eq 'manual') { $extraArguments += '-RetryFailed' }
+    & (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -File (Join-Path $projectRoot $scriptName) @extraArguments
     $nativeExit = $LASTEXITCODE
     $job.exit_code = $nativeExit
     $job.state = $(if ($nativeExit -eq 0) { 'succeeded' } else { 'failed' })

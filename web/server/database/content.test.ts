@@ -101,6 +101,32 @@ describe("durable content import", () => {
     expect((await store.importBatch(next)).new_versions).toBe(0)
   })
 
+  it("imports a backfilled body without changing source health or publication metadata", async () => {
+    const initial = fixture()
+    Object.assign(initial.articles[0], { content_status: "title_only", content_text: null, content_provider: null, content_fetched_at: null })
+    await store.importBatch(initial)
+    const sources = await store.sources()
+    const body = fixture("body-repair")
+    body.purpose = "body_backfill"
+    body.articles[0].title = "Stale title from a backfill task"
+    body.articles[0].crawled_at = "2026-11-27T12:00:00+00:00"
+    body.articles[0].content_text = "Recovered publisher body. ".repeat(10)
+    body.source_runs[0].attempted_at = body.articles[0].crawled_at
+    expect((await store.importBatch(body)).new_articles).toBe(0)
+    const article = await store.article((await store.articles()).items[0].id)
+    expect(article!.content_status).toBe("full_text")
+    expect(article!.content_text).toBe(body.articles[0].content_text)
+    expect(article!.title).toBe("Original story")
+    expect(article!.published_at).toBe("2020-01-01T00:00:00+00:00")
+    expect(await store.sources()).toEqual(sources)
+    expect((await store.importBatch(body)).duplicate).toBe(true)
+    const unknown = fixture("body-unknown")
+    unknown.purpose = "body_backfill"
+    unknown.articles[0].canonical_url = "https://example.com/not-in-the-library"
+    await expect(store.importBatch(unknown)).rejects.toThrow("Unknown backfill article")
+    expect((await store.status()).articles).toBe(1)
+  })
+
   it("binds search parameters instead of treating them as SQL", async () => {
     await store.importBatch(fixture())
     expect((await store.articles({ q: "' OR 1=1; DROP TABLE content_articles; --" })).total).toBe(0)

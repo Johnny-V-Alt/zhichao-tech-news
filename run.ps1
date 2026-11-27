@@ -29,8 +29,8 @@ try {
         $cycleFailed = $false
         $stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfff')
         try {
-            $collectArgs = @((Join-Path $appRoot 'collector\collect.py'))
-            if ($BodyBudget -ge 0) { $collectArgs += @('--body-budget', "$BodyBudget") }
+            $collectArgs = @((Join-Path $appRoot 'collector\collect.py'), '--body-budget', '0')
+            # Durable body work runs after importing links, including off-feed history.
             & $collectorPython @collectArgs 2>&1 | Tee-Object (Join-Path $appRoot "logs\collect-$stamp.log")
             $collectorExit = $LASTEXITCODE
             Push-Location (Join-Path $appRoot 'web')
@@ -38,14 +38,16 @@ try {
                 corepack pnpm exec tsx scripts/import-content.ts 2>&1 | Tee-Object (Join-Path $appRoot "logs\import-$stamp.log")
                 $importExit = $LASTEXITCODE
             } finally { Pop-Location }
+            & (Join-Path $appRoot 'backfill.ps1') -Budget $BodyBudget -InCollection -SkipProcess 2>&1 | Tee-Object (Join-Path $appRoot "logs\backfill-$stamp.log")
+            $backfillExit = $LASTEXITCODE
             & (Join-Path $appRoot 'process.ps1') 2>&1 | Tee-Object (Join-Path $appRoot "logs\processing-$stamp.log")
             $processingExit = $LASTEXITCODE
             & (Join-Path $appRoot 'editorialize.ps1') 2>&1 | Tee-Object (Join-Path $appRoot "logs\editorial-$stamp.log")
             $editorialExit = $LASTEXITCODE
             $status = Invoke-RestMethod 'http://127.0.0.1:4320/api/content/status' -TimeoutSec 10
             $sourceStates = Invoke-RestMethod 'http://127.0.0.1:4320/api/content/sources' -TimeoutSec 10
-            @{ checked_at=[DateTime]::UtcNow.ToString('o'); collector_exit=$collectorExit; import_exit=$importExit; processing_exit=$processingExit; editorial_exit=$editorialExit; editorial_state=$status.editorial.state; database=$status; sources=$sourceStates } | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $appRoot 'data\last-run.json') -Encoding UTF8
-            if ($collectorExit -ne 0 -or $importExit -ne 0 -or $processingExit -ne 0 -or $editorialExit -ne 0) { throw "Collection exit=$collectorExit; import exit=$importExit; processing exit=$processingExit. See logs and data\last-run.json." }
+            @{ checked_at=[DateTime]::UtcNow.ToString('o'); collector_exit=$collectorExit; import_exit=$importExit; processing_exit=$processingExit; backfill_exit=$backfillExit; editorial_exit=$editorialExit; editorial_state=$status.editorial.state; database=$status; sources=$sourceStates } | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $appRoot 'data\last-run.json') -Encoding UTF8
+            if ($collectorExit -ne 0 -or $importExit -ne 0 -or $backfillExit -ne 0 -or $processingExit -ne 0 -or $editorialExit -ne 0) { throw "Collection exit=$collectorExit; import exit=$importExit; processing exit=$processingExit. See logs and data\last-run.json." }
             Write-Output "Collection stored. Total articles: $($status.articles); failed sources: $($status.failed_sources). Editorial state: $($status.editorial.state)."
         } catch {
             $cycleFailed = $true

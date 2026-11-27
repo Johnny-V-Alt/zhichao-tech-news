@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest"
-import { equalKeys, signSession, verifySession, validateSources } from "./operations"
+import { describe, it, expect, vi } from "vitest"
+import { equalKeys, signSession, verifySession, validateSources, Operations } from "./operations"
 
 const config = () => ({ interval_seconds: 1800, max_body_reads: 5, sources: [{ id: "media", name: "Media", adapter: "rss", url: "https://example.com/feed.xml", kind: "tech_media", max_items: 12, enabled: true }] })
 describe("local management access and configuration", () => {
@@ -20,5 +20,25 @@ describe("local management access and configuration", () => {
     const value = config(); value.sources.push({ ...value.sources[0] }); expect(() => validateSources(value)).toThrow()
     value.sources.pop(); value.interval_seconds = 0; expect(() => validateSources(value)).toThrow()
     value.interval_seconds = 1800; value.max_body_reads = 999; expect(() => validateSources(value)).toThrow()
+  })
+})
+
+describe("body backfill scheduling", () => {
+  it("runs backfill between collection cycles and gives a due collection priority", async () => {
+    const operations = new Operations()
+    const start = vi.spyOn(operations, "startJob").mockResolvedValue({} as any)
+    const future = new Date(Date.now() + 3600000).toISOString()
+    const past = new Date(Date.now() - 10000).toISOString()
+    const state = { auto_collect: true, jobs: [], next_run_at: future, next_body_run_at: past }
+    vi.spyOn(operations, "publicState").mockResolvedValue(state as any)
+    await operations.tick()
+    expect(start).toHaveBeenLastCalledWith("backfill", "schedule")
+    state.next_run_at = past
+    await operations.tick()
+    expect(start).toHaveBeenLastCalledWith("collect", "schedule")
+    start.mockClear()
+    state.auto_collect = false
+    await operations.tick()
+    expect(start).not.toHaveBeenCalled()
   })
 })

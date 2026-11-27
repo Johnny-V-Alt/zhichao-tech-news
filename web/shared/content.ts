@@ -39,6 +39,7 @@ export interface CollectedArticle {
 }
 
 export interface CollectionBatch {
+  purpose?: "body_backfill"
   schema_version: 1
   batch_id: string
   collected_at: string

@@ -1,3 +1,4 @@
+import { bodyBackfillStatus } from "./body-backfill"
 // Local administration and orchestration around the existing PowerShell pipeline.
 // Uses Node built-ins; collection and analysis stay in the reused upstream modules.
 import { randomBytes, createHash, createHmac, timingSafeEqual } from "node:crypto"
@@ -104,7 +105,7 @@ export class Operations {
     return jobs.sort((a, b) => b.started_at.localeCompare(a.started_at)).slice(0, 50)
   }
   async startJob(kind: string, trigger = "manual") {
-    valid(["collect", "process", "editorial"].includes(kind), "未知任务类型")
+    valid(["collect", "process", "editorial", "backfill"].includes(kind), "未知任务类型")
     const jobs = await this.jobs()
     valid(!jobs.some(j => ["queued", "running"].includes(j.state)), "已有任务运行中，请等待完成")
     const lockPath = join(this.directory, "job.lock")
@@ -132,11 +133,17 @@ export class Operations {
     const settings = await this.settings(), config = await this.sourceConfig(), jobs = await this.jobs()
     let collected = null
     try { collected = JSON.parse((await readFile(join(this.root, "data", "last-run.json"), "utf-8")).replace(/^\uFEFF/, "")) } catch {}
+    let bodyPolicy: Row = { enabled: false, interval_seconds: 120 }
+    try { bodyPolicy = JSON.parse(await readFile(join(this.root, "config", "body-backfill.json"), "utf-8")) } catch {}
+    const previousBody = jobs.find(j => ["backfill", "collect"].includes(j.kind))
+    const bodyBase = previousBody?.finished_at || previousBody?.started_at
+    const nextBody = bodyPolicy.enabled && config.max_body_reads > 0 && settings.auto_collect && process.env.PORTAL_AUTOMATION_DISABLED !== "1" ? new Date(Math.max(Date.now(), bodyBase ? Date.parse(bodyBase) + Math.max(60, bodyPolicy.interval_seconds || 120) * 1000 : Date.now())).toISOString() : null
     const previous = jobs.find(j => j.kind === "collect")
     const base = previous?.finished_at || previous?.started_at || collected?.checked_at
     const interval = previous && ["failed", "interrupted"].includes(previous.state) ? settings.retry_seconds : config.interval_seconds
     const next = settings.auto_collect && process.env.PORTAL_AUTOMATION_DISABLED !== "1" ? new Date(Math.max(Date.now(), base ? Date.parse(base) + interval * 1000 : Date.now())).toISOString() : null
     return { auto_collect: settings.auto_collect, scheduler_active: !!this.timer && process.env.PORTAL_AUTOMATION_DISABLED !== "1", interval_seconds: config.interval_seconds, retry_seconds: settings.retry_seconds, next_run_at: next,
+      next_body_run_at: nextBody, body_backfill: await bodyBackfillStatus(undefined, this.root),
       jobs: jobs.slice(0, 10).map(({ pid: _pid, ...job }) => job), configured_sources: config.sources.map(({ id, name, enabled = true, kind, url }: Row) => ({ id, name, enabled, kind, url })) }
   }
   async tick() {
@@ -145,6 +152,7 @@ export class Operations {
       const state = await this.publicState()
       if (!state.auto_collect || state.jobs.some(j => ["queued", "running"].includes(j.state))) return
       if (state.next_run_at && Date.parse(state.next_run_at) <= Date.now() + 1000) await this.startJob("collect", "schedule")
+      else if (state.next_body_run_at && Date.parse(state.next_body_run_at) <= Date.now() + 1000) await this.startJob("backfill", "schedule")
     })
   }
   startScheduler() {

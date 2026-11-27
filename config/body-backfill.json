@@ -1,0 +1,9 @@
+{
+  "enabled": true,
+  "interval_seconds": 120,
+  "max_attempts": 4,
+  "retry_delay_seconds": 300,
+  "retry_backoff": 2,
+  "minimum_body_chars": 120,
+  "host_delay_seconds": 2
+}

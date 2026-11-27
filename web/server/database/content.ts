@@ -112,6 +112,7 @@ function requireURL(value: unknown, key: string) {
 export function validateBatch(input: unknown): asserts input is CollectionBatch {
   if (!input || typeof input !== "object") throw new Error("Expected batch object")
   const batch = input as CollectionBatch
+  if (batch.purpose !== undefined && batch.purpose !== "body_backfill") throw new Error("Invalid batch purpose")
   if (batch.schema_version !== 1 || !Array.isArray(batch.source_runs) || !Array.isArray(batch.articles))
     throw new Error("Unsupported batch schema")
   requireString(batch.batch_id, "batch_id", 128)
@@ -155,6 +156,7 @@ export function validateBatch(input: unknown): asserts input is CollectionBatch 
     nullableString(item.author, "author", 2000)
     nullableString(item.content_provider, "content provider", 128)
     nullableString(item.body_error, "body error", 4000)
+    if (batch.purpose === "body_backfill" && item.content_status !== "full_text") throw new Error("Invalid body backfill content")
     if (!(item.content_status in levels)) throw new Error("Invalid content status")
     nullableString(item.content_text, "content_text", 200000)
     if (["full_text", "source_summary"].includes(item.content_status) && !item.content_text) throw new Error("Missing content")
@@ -203,6 +205,11 @@ export class ContentStore {
       await this.db.prepare("INSERT INTO collection_batches VALUES (?, ?, ?, ?, ?, ?)")
         .run(batch.batch_id, batch.collected_at, digest, new Date().toISOString(), batch.articles.length, batch.source_runs.length)
       for (const run of batch.source_runs) {
+        if (batch.purpose === "body_backfill") {
+          if (!await this.db.prepare("SELECT 1 FROM content_sources WHERE source_id=?").get(run.source_id)) throw new Error("Unknown backfill source")
+          await this.db.prepare("INSERT INTO content_source_runs VALUES (?, ?, ?)").run(batch.batch_id, run.source_id, JSON.stringify({ ...run, purpose: "body_backfill" }))
+          continue // Body retrieval does not change feed health, counts or feed-fetch dates.
+        }
         await this.db.prepare(`INSERT INTO content_sources VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(source_id) DO UPDATE SET name=excluded.name, kind=excluded.kind, url=excluded.url,
           status=excluded.status, last_attempt_at=excluded.last_attempt_at,
@@ -217,17 +224,19 @@ export class ContentStore {
       for (const article of batch.articles) {
         const id = hash(article.canonical_url)
         const existing = await this.db.prepare("SELECT * FROM content_articles WHERE id=?").get(id) as ArticleRecord | undefined
+        if (batch.purpose === "body_backfill" && !existing) throw new Error("Unknown backfill article")
+        const bodyOnly = batch.purpose === "body_backfill"
         const later = !existing || article.crawled_at >= existing.last_seen_at
         const newLevel = levels[article.content_status]
         const oldLevel = existing ? levels[existing.content_status as keyof typeof levels] : -1
         const takeBody = !existing || newLevel > oldLevel || (later && newLevel === oldLevel && !!article.content_text)
         const value = {
-          title: later ? article.title : existing!.title,
-          author: later ? (article.author || existing?.author || null) : existing!.author,
+          title: bodyOnly ? existing!.title : later ? article.title : existing!.title,
+          author: bodyOnly ? existing!.author : later ? (article.author || existing?.author || null) : existing!.author,
           kind: existing?.kind || article.kind,
           published_at: existing?.published_at || article.published_at,
           publication_precision: existing?.published_at ? existing.publication_precision : article.publication_precision,
-          modified_at: later ? (article.modified_at || existing?.modified_at || null) : existing!.modified_at,
+          modified_at: bodyOnly ? existing!.modified_at : later ? (article.modified_at || existing?.modified_at || null) : existing!.modified_at,
           content_status: takeBody ? article.content_status : existing!.content_status,
           content_text: takeBody ? article.content_text : existing!.content_text,
           content_provider: takeBody ? article.content_provider : existing!.content_provider,

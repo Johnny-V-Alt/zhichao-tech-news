@@ -201,5 +201,24 @@
     "target": "Windows 10/11, Node.js 24, Python 3.12",
     "upstream_output_databases": "Excluded",
     "sanitized_upstream_docs": "Slack webhook example URLs replaced with placeholders for GitHub push protection; reused Python source files and license texts unchanged."
+  },
+  "body_backfill": {
+    "project": "https://github.com/coleifer/huey",
+    "version": "3.5.4",
+    "license": "MIT",
+    "license_file": "vendor/huey/LICENSE",
+    "reused": [
+      "SqliteHuey",
+      "native task serialization and priorities",
+      "durable pending and scheduled storage",
+      "native bounded retry and backoff",
+      "dequeue/execute/read_schedule"
+    ],
+    "local_integration": [
+      "collector/backfill.py",
+      "backfill.ps1",
+      "existing Trafilatura extraction and validated outbox importer"
+    ],
+    "additional_service": "None; SQLite only"
   }
 }
