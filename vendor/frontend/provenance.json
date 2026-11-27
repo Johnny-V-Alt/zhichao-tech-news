@@ -1,0 +1,51 @@
+[
+  {
+    "project": "daily-dev",
+    "repo": "dailydotdev/apps",
+    "commit": "776829c1840da97e431d2aa64615adb9445126c1",
+    "path": "packages/shared/src/components/cards/common/Card.tsx",
+    "sha256": "4520459b656760243aa4d31df43718b641652136ac95e49c24cdd7cb2829aa95"
+  },
+  {
+    "project": "daily-dev",
+    "repo": "dailydotdev/apps",
+    "commit": "776829c1840da97e431d2aa64615adb9445126c1",
+    "path": "packages/shared/src/components/cards/common/Card.module.css",
+    "sha256": "96adde95a05efe2b4dca5b8f7f21cbbbf8b1bd0533d13922e8d74a5c09f680a6"
+  },
+  {
+    "project": "daily-dev",
+    "repo": "dailydotdev/apps",
+    "commit": "776829c1840da97e431d2aa64615adb9445126c1",
+    "path": "packages/shared/src/components/cards/article/ArticleGrid.tsx",
+    "sha256": "8097a7913e12550995c10fe1f8c730ee59527e0c991a10f1025ee706d3f98f99"
+  },
+  {
+    "project": "daily-dev",
+    "repo": "dailydotdev/apps",
+    "commit": "776829c1840da97e431d2aa64615adb9445126c1",
+    "path": "LICENSE",
+    "sha256": "8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef"
+  },
+  {
+    "project": "folo",
+    "repo": "RSSNext/Folo",
+    "commit": "292d15d94f9e7680899e1e2567c1c0d48a423f48",
+    "path": "apps/desktop/layer/renderer/src/modules/entry-column/Items/article-item.tsx",
+    "sha256": "79f6cc12a3f92d87f71231bc47b60da57390250ab29c720f7b394eb3050194ff"
+  },
+  {
+    "project": "folo",
+    "repo": "RSSNext/Folo",
+    "commit": "292d15d94f9e7680899e1e2567c1c0d48a423f48",
+    "path": "apps/desktop/layer/renderer/src/modules/app-layout/MainDestopLayout.tsx",
+    "sha256": "bb5b48f6863747b1fc0b25628c5814cf6c6535bf6f0ecd1b3685e7182cbd0beb"
+  },
+  {
+    "project": "folo",
+    "repo": "RSSNext/Folo",
+    "commit": "292d15d94f9e7680899e1e2567c1c0d48a423f48",
+    "path": "LICENSE",
+    "sha256": "d4d9a9105552e3db12fa1ac3c9304757da4e7da48277a8eab7d226601a685886"
+  }
+]

@@ -161,7 +161,37 @@
       "停止网站.cmd"
     ],
     "additional_dependencies": [],
-    "upstream_changes": "No vendor/TrendRadar source edits; NewsNow integration, metadata and routes modified locally."
+    "upstream_changes": "No vendor/TrendRadar source edits; NewsNow integration, metadata and routes modified locally.",
+    "frontend_redesign": {
+      "daily_dev": {
+        "commit": "776829c1840da97e431d2aa64615adb9445126c1",
+        "reused": [
+          "Card primitives",
+          "Card.module.css link interaction",
+          "ArticleGrid composition"
+        ],
+        "license": "AGPL-3.0-only"
+      },
+      "folo": {
+        "commit": "292d15d94f9e7680899e1e2567c1c0d48a423f48",
+        "reused": [
+          "ArticleItemStateLess"
+        ],
+        "reference": [
+          "MainDestopLayout three-column layout"
+        ],
+        "license": "AGPL-3.0-only"
+      },
+      "originals": "vendor/frontend/",
+      "manifest": "vendor/frontend/provenance.json",
+      "additional_dependencies": [],
+      "local_adapters": [
+        "reader.tsx",
+        "index.tsx",
+        "redesign.css"
+      ],
+      "license": "LICENSE-AGPL-3.0"
+    }
   },
   "distribution": {
     "installer": "setup.ps1",

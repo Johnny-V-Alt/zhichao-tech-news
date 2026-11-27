@@ -1,0 +1,17 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+ * Adapted from daily.dev Card.module.css + Card.tsx (see daily-card.tsx).
+ * Flattened CSS nesting and translated theme utilities to local variables.
+ */
+.daily-card { position:relative; display:flex; flex-direction:column; height:100%; padding:0; border:1px solid var(--line); border-radius:16px; background:var(--paper); scroll-snap-align:start; transition:border-color .18s,box-shadow .18s,transform .18s; }
+.daily-card > * { pointer-events:none; }
+.daily-card a,.daily-card button,.daily-card label { pointer-events:all; z-index:1; }
+.daily-card .daily-link { position:absolute; inset:0; width:100%; height:100%; z-index:0; border-radius:16px; }
+.daily-card .daily-link:focus:focus-visible { border-radius:16px; }
+.daily-text-container { display:flex; flex:1; flex-direction:column; margin:0 20px; min-width:0; }
+.daily-space { flex:1; min-height:16px; }
+.daily-title { display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; }
+.daily-clamp-2 { -webkit-line-clamp:2; }
+.daily-clamp-3 { -webkit-line-clamp:3; }
+.daily-clamp-4 { -webkit-line-clamp:4; }
+.daily-card:hover { border-color:#b6acd8; box-shadow:0 9px 28px #29213e0b; transform:translateY(-2px); }
+.daily-card:focus-within { border-color:var(--teal); }

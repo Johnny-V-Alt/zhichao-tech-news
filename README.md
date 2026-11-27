@@ -91,7 +91,7 @@ Remove-Variable secret
 
 `zenfeed`、`Folo`仅作结构参考，没有复制它们的代码。新增的主要是模块衔接、存储协议、跨来源处理规则、评分门槛、阅读页面组合和本机管理。上游固定提交、文件指纹与说明见 `UPSTREAM.json`。
 
-保留所有第三方许可证和来源声明。TrendRadar及采集端为GPLv3，NewsNow原代码保留MIT声明；详见 `LICENSE`、`web/LICENSE`、`collector/LICENSE`、`vendor/TrendRadar/LICENSE` 和 `THIRD_PARTY_NOTICES.md`。新增整合代码按GPLv3提供，第三方代码继续适用各自许可证。
+保留所有第三方许可证和来源声明。TrendRadar及采集端为GPLv3，NewsNow原代码保留MIT声明；详见 `LICENSE`、`web/LICENSE`、`collector/LICENSE`、`vendor/TrendRadar/LICENSE` 和 `THIRD_PARTY_NOTICES.md`。后端整合代码按GPLv3提供，改版后的 portal 前端采用AGPL-3.0-only；第三方代码继续适用各自许可证。
 
 ## 结构
 
@@ -125,3 +125,5 @@ try {
 ```
 
 修改代码后先停止网站，再在 `web` 目录执行 `corepack pnpm run build`，避免Windows锁住SQLite原生模块。默认服务内调度已经负责定时采集；如果使用 `run.ps1 -Watch`，先在管理页关闭服务内自动采集。
+
+前端改版复用 daily.dev 卡片组件与 Folo 文章行组件，保留固定版本源码和许可证。改版后的 portal 前端采用 AGPL-3.0-only；后端及原有组件的许可证见 THIRD_PARTY_NOTICES.md 和 LICENSE-AGPL-3.0。

@@ -1,0 +1,214 @@
+import type { ReactElement, Ref } from 'react';
+import React, { forwardRef } from 'react';
+import classNames from 'classnames';
+import type { PostCardProps } from '../common/common';
+import { Container } from '../common/common';
+import { useBlockPostPanel } from '../../../hooks/post/useBlockPostPanel';
+import { useHiddenFeedbackPanel } from '../../../hooks/post/useHiddenFeedbackPanel';
+import { usePostFeedback } from '../../../hooks';
+import { isVideoPost } from '../../../graphql/posts';
+import { PostTagsPanel } from '../../post/block/PostTagsPanel';
+import FeedItemContainer from '../common/FeedItemContainer';
+import {
+  CardSpace,
+  CardTextContainer,
+  CardTitle,
+  getPostClassNames,
+} from '../common/Card';
+import CardOverlay from '../common/CardOverlay';
+import { Origin } from '../../../lib/log';
+import styles from '../common/Card.module.css';
+import { PostCardHeader } from '../common/PostCardHeader';
+import PostTags from '../common/PostTags';
+import PostMetadata from '../common/PostMetadata';
+import { PostCardFooter } from '../common/PostCardFooter';
+import ActionButtons from '../common/ActionButtons';
+import { FeedbackGrid } from './feedback/FeedbackGrid';
+import { ClickbaitShield } from '../common/ClickbaitShield';
+import { useSmartTitle } from '../../../hooks/post/useSmartTitle';
+import { CardHeaderBookmark } from '../common/CardHeaderBookmark';
+import {
+  GridCardTldr,
+  gridCardTldrCoverClassName,
+  useGridCardTldr,
+} from '../common/GridCardTldr';
+
+export const ArticleGrid = forwardRef(function ArticleGrid(
+  {
+    post,
+    onPostClick,
+    onPostAuxClick,
+    onUpvoteClick,
+    onDownvoteClick,
+    onCommentClick,
+    onTldrExpand,
+    onBookmarkClick,
+    onShare,
+    onCopyLinkClick,
+    openNewTab,
+    children,
+    onReadArticleClick,
+    domProps = {},
+    eagerLoadImage = false,
+  }: PostCardProps,
+  ref: Ref<HTMLElement>,
+): ReactElement {
+  const { className, style } = domProps;
+  const { isHidden, content: hiddenPanel } = useHiddenFeedbackPanel(post);
+  const { data } = useBlockPostPanel(post);
+  const onPostCardClick = () => onPostClick(post);
+  const onPostCardAuxClick = () => onPostAuxClick(post);
+  const { pinnedAt, trending } = post;
+  const { showFeedback } = usePostFeedback({ post });
+  const { title } = useSmartTitle(post);
+  const isVideoType = isVideoPost(post);
+  const tldr = useGridCardTldr(post);
+  const showTldr = tldr.isShown && !showFeedback;
+  const isTldrExpanded = showTldr && tldr.isExpanded;
+
+  if (isHidden) {
+    return (
+      <FeedItemContainer
+        domProps={{
+          ...domProps,
+          style,
+          className: getPostClassNames(post, className, 'min-h-card'),
+        }}
+        ref={ref}
+        flagProps={{ pinnedAt, trending }}
+        bookmarked={post.bookmarked}
+      >
+        {hiddenPanel}
+      </FeedItemContainer>
+    );
+  }
+
+  if (data?.showTagsPanel && post.tags.length > 0) {
+    return (
+      <PostTagsPanel
+        className="h-full overflow-hidden"
+        post={post}
+        toastOnSuccess
+      />
+    );
+  }
+
+  return (
+    <FeedItemContainer
+      domProps={{
+        ...domProps,
+        style: isTldrExpanded ? { ...style, ...tldr.cardStyle } : style,
+        className: getPostClassNames(
+          post,
+          classNames(className, showFeedback && '!p-0'),
+          'min-h-card',
+        ),
+      }}
+      ref={ref}
+      flagProps={{ pinnedAt, trending }}
+      bookmarked={post.bookmarked && !showFeedback}
+      bookmarkNote={showFeedback ? undefined : post.bookmark?.note}
+    >
+      <CardOverlay
+        post={post}
+        onPostCardClick={onPostCardClick}
+        onPostCardAuxClick={onPostCardAuxClick}
+      />
+      {showFeedback && (
+        <FeedbackGrid
+          post={post}
+          onUpvoteClick={() => onUpvoteClick(post, Origin.FeedbackCard)}
+          onDownvoteClick={() => onDownvoteClick(post, Origin.FeedbackCard)}
+          isVideoType={isVideoType}
+        />
+      )}
+
+      <div
+        className={classNames(
+          showFeedback
+            ? 'overflow-hidden rounded-16 border !border-border-subtlest-tertiary p-2'
+            : 'flex flex-1 flex-col',
+          showFeedback && styles.post,
+          showFeedback && styles.read,
+        )}
+      >
+        <CardTextContainer className={showTldr ? 'min-h-0 flex-1' : undefined}>
+          <PostCardHeader
+            post={post}
+            className={showFeedback ? '!hidden' : 'flex'}
+            openNewTab={openNewTab}
+            source={post.source}
+            postLink={post.permalink}
+            onReadArticleClick={onReadArticleClick}
+            showFeedback={showFeedback}
+            bookmark={
+              <CardHeaderBookmark
+                post={post}
+                onBookmarkClick={onBookmarkClick}
+              />
+            }
+          />
+          <CardTitle lineClamp={showFeedback ? 'line-clamp-2' : undefined}>
+            {title}
+          </CardTitle>
+          {showTldr && tldr.summary && (
+            <GridCardTldr
+              summary={tldr.summary}
+              isExpanded={tldr.isExpanded}
+              onExpand={(cardHeight) => {
+                tldr.expand(cardHeight);
+                onTldrExpand?.(post);
+              }}
+              onOpen={onPostCardClick}
+            />
+          )}
+        </CardTextContainer>
+        {!showFeedback && !isTldrExpanded && (
+          <Container className={showTldr ? 'flex-none' : undefined}>
+            {!showTldr && <CardSpace />}
+            <div className="mx-4 flex items-center">
+              {post.clickbaitTitleDetected && <ClickbaitShield post={post} />}
+              <PostTags post={post} />
+            </div>
+            <PostMetadata
+              createdAt={post.createdAt}
+              readTime={post.readTime}
+              isVideoType={isVideoType}
+              className="mx-4"
+            />
+          </Container>
+        )}
+        <Container className={showTldr ? 'flex-none' : undefined}>
+          {!isTldrExpanded && (
+            <PostCardFooter
+              openNewTab={openNewTab ?? false}
+              post={post}
+              onShare={onShare}
+              className={{
+                image: classNames(
+                  'px-1',
+                  showFeedback && 'mb-0',
+                  showTldr && gridCardTldrCoverClassName,
+                ),
+              }}
+              eagerLoadImage={eagerLoadImage}
+            />
+          )}
+
+          {!showFeedback && (
+            <ActionButtons
+              post={post}
+              onUpvoteClick={onUpvoteClick}
+              onCommentClick={onCommentClick}
+              onCopyLinkClick={onCopyLinkClick}
+              onBookmarkClick={onBookmarkClick}
+              bookmarkInHeader
+              onDownvoteClick={onDownvoteClick}
+            />
+          )}
+        </Container>
+      </div>
+      {children}
+    </FeedItemContainer>
+  );
+});
