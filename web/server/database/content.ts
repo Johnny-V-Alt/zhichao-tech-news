@@ -36,6 +36,11 @@ CREATE TABLE IF NOT EXISTS content_articles (
   content_status TEXT NOT NULL, content_text TEXT, content_provider TEXT, content_fetched_at TEXT,
   content_sha256 TEXT NOT NULL, body_error TEXT
 );
+CREATE TABLE IF NOT EXISTS content_article_documents (
+  article_id TEXT PRIMARY KEY REFERENCES content_articles(id), article_fingerprint TEXT NOT NULL,
+  content_html TEXT NOT NULL, rich_version INTEGER NOT NULL, image_url TEXT,
+  image_count INTEGER NOT NULL DEFAULT 0, image_error_count INTEGER NOT NULL DEFAULT 0, fetched_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS content_article_sources (
   source_id TEXT NOT NULL REFERENCES content_sources(source_id), source_item_id TEXT NOT NULL,
   article_id TEXT NOT NULL REFERENCES content_articles(id), original_url TEXT NOT NULL,
@@ -67,6 +72,11 @@ export interface ArticleRecord {
   modified_at: string | null
   content_status: ContentStatus
   content_text: string | null
+  content_html?: string | null
+  rich_version?: number
+  image_url?: string | null
+  image_count?: number
+  image_error_count?: number
   content_provider: string | null
   content_fetched_at: string | null
   content_sha256: string
@@ -159,6 +169,13 @@ export function validateBatch(input: unknown): asserts input is CollectionBatch 
     if (batch.purpose === "body_backfill" && item.content_status !== "full_text") throw new Error("Invalid body backfill content")
     if (!(item.content_status in levels)) throw new Error("Invalid content status")
     nullableString(item.content_text, "content_text", 200000)
+    if (item.content_html != null) {
+      requireString(item.content_html, "content_html", 600000)
+      if (item.content_status !== "full_text" || item.rich_version !== 1) throw new Error("Invalid rich article version/status")
+      if (item.image_url != null && !/^\/api\/content\/images\/[a-f0-9]{64}$/.test(item.image_url)) throw new Error("Invalid cached image URL")
+      for (const count of [item.image_count ?? 0, item.image_error_count ?? 0])
+        if (!Number.isInteger(count) || count < 0 || count > 10000) throw new Error("Invalid image count")
+    } else if (item.rich_version) throw new Error("Missing article HTML")
     if (["full_text", "source_summary"].includes(item.content_status) && !item.content_text) throw new Error("Missing content")
     const key = JSON.stringify([item.source_id, item.source_item_id])
     if (keys.has(key)) throw new Error("Duplicate source item in batch")
@@ -256,6 +273,14 @@ export class ContentStore {
           .run(id, article.canonical_url, value.title, value.author, value.kind, value.published_at, value.publication_precision,
             article.crawled_at, article.crawled_at, value.modified_at, value.content_status, value.content_text,
             value.content_provider, value.content_fetched_at, fingerprint, article.body_error)
+        if (takeBody && article.content_html) {
+          await this.db.prepare(`INSERT INTO content_article_documents VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(article_id) DO UPDATE SET article_fingerprint=excluded.article_fingerprint,
+            content_html=excluded.content_html,rich_version=excluded.rich_version,image_url=excluded.image_url,
+            image_count=excluded.image_count,image_error_count=excluded.image_error_count,fetched_at=excluded.fetched_at`)
+            .run(id, fingerprint, article.content_html, article.rich_version, article.image_url || null,
+              article.image_count ?? 0, article.image_error_count ?? 0, article.content_fetched_at || article.crawled_at)
+        }
         const versionExists = await this.db.prepare("SELECT 1 FROM content_article_versions WHERE article_id=? AND fingerprint=?").get(id, fingerprint)
         if (!versionExists) {
           await this.db.prepare("INSERT INTO content_article_versions VALUES (?, ?, ?, ?, ?)")
@@ -326,6 +351,7 @@ export class ContentStore {
     const count = await this.db.prepare(`SELECT COUNT(*) AS total FROM content_articles a LEFT JOIN article_processing p ON p.article_id=a.id ${where}`).get(...params) as Row
     const items = await this.db.prepare(`SELECT a.id,a.canonical_url,a.title,a.kind,a.published_at,a.publication_precision,
       a.first_seen_at,a.last_seen_at,a.content_status,SUBSTR(a.content_text,1,300) AS source_excerpt,
+      (SELECT d.image_url FROM content_article_documents d WHERE d.article_id=a.id AND d.article_fingerprint=a.content_sha256) AS image_url,
       (SELECT COUNT(*) FROM content_article_sources s WHERE s.article_id=a.id) AS source_count,
       (SELECT group_concat(c.name, ' · ') FROM content_article_sources s JOIN content_sources c ON c.source_id=s.source_id WHERE s.article_id=a.id) AS source_names, p.data_json AS processing_json, p.article_fingerprint AS analyzed_fingerprint,a.content_sha256,
       (SELECT event_id FROM event_articles ea WHERE ea.article_id=a.id) AS event_id
@@ -336,7 +362,9 @@ export class ContentStore {
   }
 
   async article(id: string, includeEditorial = true) {
-    const article = await this.db.prepare("SELECT * FROM content_articles WHERE id=?").get(id) as ArticleRecord | undefined
+    const article = await this.db.prepare(`SELECT a.*,d.content_html,COALESCE(d.rich_version,0) AS rich_version,
+      d.image_url,COALESCE(d.image_count,0) AS image_count,COALESCE(d.image_error_count,0) AS image_error_count
+      FROM content_articles a LEFT JOIN content_article_documents d ON d.article_id=a.id AND d.article_fingerprint=a.content_sha256 WHERE a.id=?`).get(id) as (ArticleRecord & Row) | undefined
     if (!article) return null
     const observations = await this.db.prepare(`SELECT s.source_id,c.name,s.original_url,s.discussion_url,s.first_seen_at,s.last_seen_at,s.data_json
       FROM content_article_sources s JOIN content_sources c ON c.source_id=s.source_id WHERE article_id=?`).all(id) as Row[]

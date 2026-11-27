@@ -253,10 +253,13 @@ def read_with_trafilatura(url, allowed_hosts, minimum_chars=120):
                     if size > 3_000_000:
                         raise ValueError("Page exceeds body download limit")
                     chunks.append(chunk)
-            text = trafilatura.extract(b"".join(chunks), url=url, output_format="txt", include_comments=False, favor_precision=True)
+            document = b"".join(chunks)
+            text = trafilatura.extract(document, url=url, output_format="txt", include_comments=False, favor_precision=True)
+            markup = trafilatura.extract(document, url=url, output_format="html", include_images=True,
+                                         include_formatting=True, include_links=True, include_comments=False, favor_precision=True)
             if not text or len(text.strip()) < minimum_chars:
                 raise ValueError("No sufficient main text found")
-            return {"success":True,"data":{"url":url,"content":text,"provider":"trafilatura"}}
+            return {"success":True,"data":{"url":url,"content":text,"content_html":markup,"provider":"trafilatura"}}
         raise ValueError("Too many publisher redirects")
     except Exception as error:
         return {"success":False,"error":{"url":original_url,"message":str(error)[:2000],"provider":"trafilatura"}}

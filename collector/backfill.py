@@ -20,6 +20,8 @@ from urllib.parse import urlsplit
 import uuid
 
 from huey import SqliteHuey
+from article_media import prepare_document, RICH_VERSION
+from collect import DataFetcher
 
 from collect import APP, atomic_json, now, public_body_url, read_with_trafilatura
 
@@ -75,6 +77,8 @@ class BodyQueue:
                                   retry_delay=self.policy["retry_delay_seconds"],
                                   retry_backoff=self.policy["retry_backoff"])(self.fetch)
         self.host_attempts = {}
+        with closing(self.content_db()) as content:
+            self.has_documents = bool(content.execute("SELECT 1 FROM sqlite_master WHERE name='content_article_documents'").fetchone())
 
     def close(self):
         self.db.close()
@@ -97,9 +101,21 @@ class BodyQueue:
         atomic_json(self.directory / "articles" / f"{article_id}.json", state)
         return state
 
+    def article_query(self):
+        if self.has_documents:
+            return """SELECT a.*, COALESCE(d.rich_version,0) AS rich_version,
+                      COALESCE(d.image_error_count,0) AS image_error_count FROM content_articles a
+                      LEFT JOIN content_article_documents d ON d.article_id=a.id AND d.article_fingerprint=a.content_sha256"""
+        return "SELECT a.*,0 AS rich_version,0 AS image_error_count FROM content_articles a"
+
+    def complete(self, article):
+        return (article["content_status"] == "full_text" and
+                len(article.get("content_text") or "") >= self.policy["minimum_body_chars"] and
+                article.get("rich_version", 0) >= RICH_VERSION)
+
     def record(self, article_id):
         with closing(self.content_db()) as db:
-            article = db.execute("SELECT * FROM content_articles WHERE id=?", (article_id,)).fetchone()
+            article = db.execute(self.article_query() + " WHERE a.id=?", (article_id,)).fetchone()
             if not article:
                 return None, []
             links = [dict(r) for r in db.execute("SELECT * FROM content_article_sources WHERE article_id=? ORDER BY source_id", (article_id,))]
@@ -118,13 +134,14 @@ class BodyQueue:
         """
         queued_ids = {task.id for task in [*self.huey.pending(), *self.huey.scheduled()]}
         with closing(self.content_db()) as db:
-            rows = [dict(r) for r in db.execute("SELECT * FROM content_articles ORDER BY published_at DESC, id")]
+            rows = [dict(r) for r in db.execute(self.article_query() + " ORDER BY a.published_at DESC, a.id")]
         for article in rows:
             aid = article["id"]
             if only and aid not in only:
                 continue
             state = self.state(aid)
-            if article["content_status"] == "full_text" and len(article.get("content_text") or "") >= self.policy["minimum_body_chars"]:
+            retry_images = retry_failed and article.get("image_error_count", 0) > 0
+            if self.complete(article) and not retry_images:
                 if state and state.get("state") != "complete":
                     self.save(aid, state="complete", next_retry_at=None, error=None)
                 continue
@@ -148,10 +165,10 @@ class BodyQueue:
                 continue
             if state.get("state") in {"failed", "blocked"} and not retry_failed:
                 continue
-            signature = self.task.s(aid, priority=100 if not article.get("content_text") else 20)
+            signature = self.task.s(aid, priority=300 if retry_images else 200 if article["content_status"] == "full_text" else 100 if not article.get("content_text") else 20)
             # State before enqueue makes a crash here recoverable on next scan.
             self.save(aid, state="queued", task_id=signature.id, source_id=source["id"],
-                      attempts=state.get("attempts", 0), next_retry_at=None,
+                      attempts=state.get("attempts", 0), retry_images=retry_images, next_retry_at=None,
                       error=None, queued_at=now())
             self.huey.enqueue(signature)
 
@@ -160,7 +177,7 @@ class BodyQueue:
         if not article:
             self.save(article_id, state="failed", error="文章记录不存在", next_retry_at=None)
             return
-        if article["content_status"] == "full_text" and len(article.get("content_text") or "") >= self.policy["minimum_body_chars"]:
+        if self.complete(article) and not self.state(article_id).get("retry_images"):
             self.save(article_id, state="complete", next_retry_at=None, error=None)
             return
         source = self.eligible_source(links)
@@ -197,12 +214,17 @@ class BodyQueue:
             if len(text) < 1000 and any(x in lower for x in ["verify you are human", "just a moment...", "checking your browser", "access denied"]):
                 self.save(article_id, state="blocked", error="来源返回访问验证页面，未保存为正文", next_retry_at=None)
                 return
+            markup = (result.get("data") or {}).get("content_html")
+            if not markup:
+                raise RuntimeError("已取得文字，但尚未提取到图文结构")
+            document = prepare_document(markup, url, self.data_dir, public_body_url, DataFetcher.DEFAULT_HEADERS, atomic_json) if markup else {}
             link = next(r for r in links if r["source_id"] == source["id"])
             observation = json.loads(link["data_json"])
             stamp = now()
             observation.update({k: article[k] for k in ["canonical_url", "title", "author", "kind", "published_at", "publication_precision", "modified_at"]})
             observation.update(content_status="full_text", content_text=text[:200000], content_provider="trafilatura",
                                content_fetched_at=stamp, crawled_at=stamp, body_error=None)
+            observation.update(document)
             batch_id = "body-" + uuid.uuid4().hex
             run = dict(source_id=source["id"], name=source["name"], kind=source["kind"], url=source["url"],
                        status="success", attempted_at=stamp, fetched_at=stamp, last_success_at=stamp,
@@ -211,7 +233,8 @@ class BodyQueue:
                         batch_id=batch_id, collected_at=stamp, source_runs=[run], articles=[observation]))
             atomic_json(self.data_dir / "body-cache" / f"{article_id}.json", {**result, "retrieved_at": stamp})
             self.save(article_id, state="awaiting_import", error=None, next_retry_at=None,
-                      outbox_file=f"{batch_id}.json", body_chars=len(text[:200000]), provider="trafilatura")
+                      outbox_file=f"{batch_id}.json", body_chars=len(text[:200000]), provider="trafilatura",
+                      image_count=document.get("image_count", 0), image_error_count=document.get("image_error_count", 0), retry_images=False)
         except Exception as error:
             remaining = task.retries if task else 0
             retry_at = datetime.fromtimestamp(time.time() + (task.retry_delay if task else 0), timezone.utc).isoformat(timespec="seconds")

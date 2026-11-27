@@ -17,6 +17,7 @@ def library(tmp_path, monkeypatch):
       CREATE TABLE content_articles(id TEXT PRIMARY KEY,canonical_url TEXT,title TEXT,author TEXT,kind TEXT,
         published_at TEXT,publication_precision TEXT,first_seen_at TEXT,last_seen_at TEXT,modified_at TEXT,
         content_status TEXT,content_text TEXT,content_provider TEXT,content_fetched_at TEXT,content_sha256 TEXT,body_error TEXT);
+      CREATE TABLE content_article_documents(article_id TEXT PRIMARY KEY,article_fingerprint TEXT,rich_version INTEGER,image_error_count INTEGER);
       CREATE TABLE content_article_sources(article_id TEXT,source_id TEXT,source_item_id TEXT,original_url TEXT,
         discussion_url TEXT,first_seen_at TEXT,last_seen_at TEXT,data_json TEXT);
     ''')
@@ -85,7 +86,7 @@ def test_native_huey_delays_and_bounds_retries_without_losing_existing_text(libr
 
 def test_success_uses_existing_import_outbox_and_retains_original_date(library):
     text="Original publisher article body. "*12
-    def success(*args,**kwargs):return {"success":True,"data":{"content":text,"provider":"trafilatura"}}
+    def success(*args,**kwargs):return {"success":True,"data":{"content":text,"content_html":"<html><body><p>"+text+"</p></body></html>","provider":"trafilatura"}}
     q=make_queue(library,success);q.reconcile();q.drain(1)
     files=list((library[1]/"outbox").glob('*.json'));assert len(files)==1
     batch=json.loads(files[0].read_text(encoding="utf-8"));a=batch["articles"][0]
@@ -97,6 +98,7 @@ def test_success_uses_existing_import_outbox_and_retains_original_date(library):
     with sqlite3.connect(library[0]) as db:
         assert db.execute("SELECT content_text FROM content_articles").fetchone()[0] is None
         db.execute("UPDATE content_articles SET content_status='full_text',content_text=?",(text,))
+        db.execute("INSERT INTO content_article_documents VALUES (?,?,?,?)",(library[3],"initial",1,0))
     q.reconcile();assert q.state(library[3])["state"]=="complete"
     q.close()
 
@@ -139,4 +141,37 @@ def test_non_public_url_is_not_fetched(library,monkeypatch):
 def test_disabled_backfill_policy_does_not_enqueue(library):
     q=make_queue(library,enabled=False);q.reconcile()
     assert q.huey.pending_count()==0
+    q.close()
+
+
+def test_existing_plain_text_is_queued_for_rich_upgrade(library):
+    with sqlite3.connect(library[0]) as db:
+        db.execute("UPDATE content_articles SET content_status='full_text',content_text=?",("Existing body. "*30,))
+    q=make_queue(library);q.reconcile()
+    assert q.huey.pending_count()==1
+    assert q.huey.pending()[0].priority==200
+    q.close()
+
+
+def test_rich_article_is_not_queued_again_unless_failed_images_are_manually_retried(library):
+    with sqlite3.connect(library[0]) as db:
+        db.execute("UPDATE content_articles SET content_status='full_text',content_text=?",("Existing body. "*30,))
+        db.execute("INSERT INTO content_article_documents VALUES (?,?,?,?)",(library[3],"initial",1,1))
+    q=make_queue(library);q.reconcile()
+    assert q.huey.pending_count()==0
+    q.reconcile(retry_failed=True)
+    assert q.huey.pending_count()==1 and q.state(library[3])["retry_images"]
+    assert q.huey.pending()[0].priority==300
+    q.close()
+
+
+def test_plain_text_only_result_retries_rich_upgrade_without_losing_existing_body(library):
+    original="Existing verified body. "*12
+    with sqlite3.connect(library[0]) as db:
+        db.execute("UPDATE content_articles SET content_status='full_text',content_text=?",(original,))
+    def incomplete(*args,**kwargs):return {"success":True,"data":{"content":"New plain text. "*20}}
+    q=make_queue(library,incomplete);q.reconcile();q.drain(1)
+    assert q.state(library[3])["state"]=="retrying"
+    assert not (library[1]/"outbox").exists()
+    assert q.record(library[3])[0]["content_text"]==original
     q.close()

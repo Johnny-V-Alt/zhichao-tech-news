@@ -28,3 +28,11 @@ No upstream LICENSE or copyright notice was removed. New integration code is ide
 - Version: 3.5.4, installed from PyPI and pinned in collector requirements.
 - License: MIT; original text retained in `vendor/huey/LICENSE`.
 - Direct reuse: SqliteHuey native task serialization, priority queue, SQLite persistence, delayed scheduling, retry/backoff, dequeue and execute APIs. Local code only integrates article eligibility, extraction status and the existing outbox importer. No Huey source modifications and no Redis dependency.
+
+## Rich article images and typography
+
+- Trafilatura 2.4.0 (Apache-2.0): reuse its native HTML output with image, formatting and link preservation. No upstream source changes.
+- DOMPurify 3.5.0: https://github.com/cure53/DOMPurify ; Apache-2.0 OR MPL-2.0. Direct npm dependency, unmodified sanitization engine; original license texts retained in `vendor/dompurify/`. Local integration only restricts allowed reader elements, image URLs and hyperlinks.
+- github-markdown-css 5.9.0: https://github.com/sindresorhus/github-markdown-css ; MIT. Direct import of the unmodified `github-markdown-light.css` stylesheet. License retained in `vendor/github-markdown-css/license`. Chinese reader spacing and image constraints are separate local CSS overrides.
+- jsdom 31.0.1 and @types/jsdom 30.0.0 are development-only dependencies for DOMPurify regression tests. Publisher scripts and external resources are not enabled in the test DOM.
+- No Mozilla Readability integration was added for this change.

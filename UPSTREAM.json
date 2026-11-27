@@ -220,5 +220,43 @@
       "existing Trafilatura extraction and validated outbox importer"
     ],
     "additional_service": "None; SQLite only"
+  },
+  "rich_article_reader": {
+    "trafilatura": {
+      "version": "2.4.0",
+      "reuse": [
+        "extract(output_format=\"html\", include_images=True, include_formatting=True, include_links=True)"
+      ],
+      "license": "Apache-2.0"
+    },
+    "dompurify": {
+      "url": "https://github.com/cure53/DOMPurify",
+      "version": "3.5.0",
+      "reuse": [
+        "native HTML sanitizer and explicit element/attribute allowlist"
+      ],
+      "license": "Apache-2.0 OR MPL-2.0",
+      "license_files": "vendor/dompurify/"
+    },
+    "github_markdown_css": {
+      "url": "https://github.com/sindresorhus/github-markdown-css",
+      "version": "5.9.0",
+      "reuse": [
+        "unmodified github-markdown-light.css imported from npm"
+      ],
+      "license": "MIT",
+      "license_files": "vendor/github-markdown-css/"
+    },
+    "local_integration": [
+      "collector/article_media.py",
+      "web/shared/article-html.ts",
+      "web/src/components/portal/article-body.tsx",
+      "web/src/components/portal/article-body.css"
+    ],
+    "test_only_support": {
+      "jsdom": "31.0.1",
+      "@types/jsdom": "30.0.0"
+    },
+    "readability_added": false
   }
 }

@@ -32,6 +32,12 @@ export interface CollectedArticle {
   crawled_at: string
   content_status: ContentStatus
   content_text: string | null
+  /** Untrusted extracted markup; reader must sanitize with DOMPurify. */
+  content_html?: string | null
+  rich_version?: number
+  image_url?: string | null
+  image_count?: number
+  image_error_count?: number
   content_provider: string | null
   content_fetched_at: string | null
   body_error: string | null

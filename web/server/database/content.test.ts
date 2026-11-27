@@ -127,6 +127,29 @@ describe("durable content import", () => {
     expect((await store.status()).articles).toBe(1)
   })
 
+  it("persists rich documents across restart, preserves them on text-only observations and invalidates stale markup", async () => {
+    await store.importBatch(fixture())
+    const id = (await store.articles()).items[0].id
+    const rich = fixture("rich-document")
+    rich.purpose = "body_backfill"
+    Object.assign(rich.articles[0], { content_html: "<p>Source <strong>page</strong> text</p><img src='/api/content/images/" + "a".repeat(64) + "'>", rich_version: 1, image_url: "/api/content/images/" + "a".repeat(64), image_count: 1, image_error_count: 0 })
+    expect((await store.importBatch(rich)).new_versions).toBe(0)
+    expect(await store.article(id)).toMatchObject({ rich_version: 1, content_html: rich.articles[0].content_html, image_count: 1 })
+    expect((await store.articles()).items[0].image_url).toBe(rich.articles[0].image_url)
+    await store.close(); store = await new ContentStore(join(directory, "content.sqlite3")).init()
+    expect((await store.article(id))!.content_html).toBe(rich.articles[0].content_html)
+    const weaker = fixture("plain-repeat")
+    await store.importBatch(weaker)
+    expect((await store.article(id))!.rich_version).toBe(1)
+    const changed = fixture("changed-text")
+    changed.articles[0].content_text = "A materially changed source body"
+    await store.importBatch(changed)
+    expect(await store.article(id)).toMatchObject({ content_html: null, rich_version: 0, image_url: null })
+    const malformed = fixture("bad-rich")
+    malformed.articles[0].content_html = "<p>text</p>"
+    expect(() => validateBatch(malformed)).toThrow("rich article")
+  })
+
   it("binds search parameters instead of treating them as SQL", async () => {
     await store.importBatch(fixture())
     expect((await store.articles({ q: "' OR 1=1; DROP TABLE content_articles; --" })).total).toBe(0)
