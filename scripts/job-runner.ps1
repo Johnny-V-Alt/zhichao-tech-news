@@ -10,6 +10,7 @@ function Save-Job {
 }
 $job.state = 'running'
 $job.pid = $PID
+$job | Add-Member -NotePropertyName start_ticks -NotePropertyValue ((Get-Process -Id $PID).StartTime.ToUniversalTime().Ticks.ToString()) -Force
 Save-Job
 $nativeExit = 1
 try {

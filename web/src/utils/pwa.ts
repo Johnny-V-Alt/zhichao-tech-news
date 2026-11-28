@@ -12,7 +12,7 @@ const SUCCESS_KEY = "newsnow:pwa-update-successful"
 localStorage.removeItem("updated")
 
 // 浏览器默认只在页面加载时检查 SW 更新，定时检查让长时间打开的页面也能拿到更新
-const UPDATE_CHECK_INTERVAL = 60 * 60 * 1000
+const UPDATE_CHECK_INTERVAL = 60 * 1000
 
 const pendingAtStartup = localStorage.getItem(PENDING_KEY) === "true"
 const successfulAtStartup = sessionStorage.getItem(SUCCESS_KEY) === "true"
@@ -83,6 +83,9 @@ const updateServiceWorker = registerSW({
     markPwaUpdateReady(() => updateServiceWorker(true))
     // 上次启动时就已检测到更新但未能应用，这次直接更新
     if (pendingAtStartup) applyUpdate()
+    // Read-only pages should not stay on the old reader for another hour.
+    // Preserve the manual update prompt on administration forms.
+    else if (!location.pathname.startsWith("/admin")) setTimeout(applyUpdate, 1500)
   },
   onRegisteredSW(_swUrl, registration) {
     if (!registration) return

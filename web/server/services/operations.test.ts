@@ -42,3 +42,12 @@ describe("body backfill scheduling", () => {
     expect(start).not.toHaveBeenCalled()
   })
 })
+
+
+describe("Windows worker identity", () => {
+  it.skipIf(process.platform !== "win32")("rejects a live unrelated process instead of blocking all future jobs", async () => {
+    const operations = new Operations()
+    const job = { id: "a".repeat(24), pid: process.pid, state: "running", started_at: new Date(Date.now()-60000).toISOString() }
+    expect(await operations.jobIsAlive(job)).toBe(false)
+  })
+})

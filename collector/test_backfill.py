@@ -149,7 +149,7 @@ def test_existing_plain_text_is_queued_for_rich_upgrade(library):
         db.execute("UPDATE content_articles SET content_status='full_text',content_text=?",("Existing body. "*30,))
     q=make_queue(library);q.reconcile()
     assert q.huey.pending_count()==1
-    assert q.huey.pending()[0].priority==200
+    assert q.huey.pending()[0].priority==1577836800
     q.close()
 
 
@@ -161,7 +161,7 @@ def test_rich_article_is_not_queued_again_unless_failed_images_are_manually_retr
     assert q.huey.pending_count()==0
     q.reconcile(retry_failed=True)
     assert q.huey.pending_count()==1 and q.state(library[3])["retry_images"]
-    assert q.huey.pending()[0].priority==300
+    assert q.huey.pending()[0].priority==2**52
     q.close()
 
 
@@ -175,3 +175,40 @@ def test_plain_text_only_result_retries_rich_upgrade_without_losing_existing_bod
     assert not (library[1]/"outbox").exists()
     assert q.record(library[3])[0]["content_text"]==original
     q.close()
+
+
+def test_latest_summary_precedes_old_full_text_and_legacy_pending_tasks_migrate(library):
+    old_id=library[3]
+    new_url="https://example.com/new-story"
+    new_id=hashlib.sha256(new_url.encode()).hexdigest()
+    with sqlite3.connect(library[0]) as db:
+        db.row_factory=sqlite3.Row
+        old=dict(db.execute("SELECT * FROM content_articles").fetchone())
+        db.execute("UPDATE content_articles SET content_status='full_text',content_text=?",("Old body. "*30,))
+        fresh={**old,"id":new_id,"canonical_url":new_url,"published_at":"2026-11-27T00:00:00+00:00","content_status":"source_summary","content_text":"Source summary"}
+        db.execute("INSERT INTO content_articles VALUES ("+','.join('?' for _ in fresh)+")",tuple(fresh.values()))
+        observation=json.loads(db.execute("SELECT data_json FROM content_article_sources").fetchone()[0])
+        observation.update(canonical_url=new_url,original_url=new_url,source_item_id='new')
+        db.execute("INSERT INTO content_article_sources VALUES (?,?,?,?,?,?,?,?)",(new_id,'publisher','new',new_url,None,old['first_seen_at'],old['last_seen_at'],json.dumps(observation)))
+    q=make_queue(library)
+    old_task=q.task.s(old_id,priority=200)
+    new_task=q.task.s(new_id,priority=20)
+    new_task.retries=1
+    for task in [old_task,new_task]:
+        q.save(task.args[0],state='queued',task_id=task.id,attempts=0)
+        q.huey.enqueue(task)
+    q.reconcile()
+    pending=q.huey.pending()
+    assert [t.args[0] for t in pending]==[new_id,old_id]
+    assert pending[0].id==new_task.id and pending[0].retries==1
+    assert q.huey.pending_count()==2
+    q.close()
+    q=make_queue(library);q.reconcile()
+    assert [t.args[0] for t in q.huey.pending()]==[new_id,old_id]
+    q.close()
+
+
+def test_unknown_and_invalid_future_dates_do_not_get_fabricated_freshness():
+    assert BodyQueue.priority({'published_at':None})==0
+    assert BodyQueue.priority({'published_at':'bad date'})==0
+    assert BodyQueue.priority({'published_at':'2099-01-01T00:00:00+00:00'})==0

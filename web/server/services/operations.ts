@@ -5,7 +5,8 @@ import { randomBytes, createHash, createHmac, timingSafeEqual } from "node:crypt
 import { readFile, writeFile, mkdir, rename, readdir, open, unlink } from "node:fs/promises"
 import { existsSync, openSync, closeSync } from "node:fs"
 import { resolve, join } from "node:path"
-import { spawn } from "node:child_process"
+import { spawn, execFile } from "node:child_process"
+import { promisify } from "node:util"
 import process from "node:process"
 import { getContentStore } from "../database/content"
 
@@ -93,13 +94,22 @@ export class Operations {
     await this.audit("sources", { source_ids: next.sources.map((s: Row) => s.id), interval_seconds: next.interval_seconds })
     return { saved: true }
   }
+  async jobIsAlive(job: Row) {
+    if (!Number.isSafeInteger(job.pid) || job.pid <= 0) return false
+    try { process.kill(job.pid, 0) } catch { return false }
+    if (process.platform !== "win32") return true
+    const shell = process.env.PORTAL_POWERSHELL || (existsSync("C:/Program Files/PowerShell/7/pwsh.exe") ? "C:/Program Files/PowerShell/7/pwsh.exe" : "powershell.exe")
+    try {
+      const { stdout } = await promisify(execFile)(shell, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", join(this.root, "scripts", "check-job-process.ps1"), "-ProcessId", String(job.pid), "-JobId", String(job.id), "-StartedAt", String(job.started_at), "-StartTicks", String(job.start_ticks || "")], { windowsHide: true, timeout: 5000, maxBuffer: 4096 })
+      return stdout.trim() === "True"
+    } catch { return false }
+  }
   async jobs() {
     await this.init()
     const files = (await readdir(join(this.directory, "jobs"))).filter(f => /^[a-f0-9]{24}\.json$/.test(f))
     const jobs: Row[] = await Promise.all(files.map(async f => JSON.parse((await readFile(join(this.directory, "jobs", f), "utf-8")).replace(/^\uFEFF/, ""))))
     for (const job of jobs) if (["queued", "running"].includes(job.state) && Date.now() - Date.parse(job.started_at) > 15000) {
-      let alive = false
-      try { if (job.pid) { process.kill(job.pid, 0); alive = true } } catch {}
+      const alive = await this.jobIsAlive(job)
       if (!alive) { job.state = "interrupted"; job.finished_at = new Date().toISOString(); await this.save(`jobs/${job.id}.json`, job) }
     }
     return jobs.sort((a, b) => b.started_at.localeCompare(a.started_at)).slice(0, 50)
@@ -144,7 +154,7 @@ export class Operations {
     const next = settings.auto_collect && process.env.PORTAL_AUTOMATION_DISABLED !== "1" ? new Date(Math.max(Date.now(), base ? Date.parse(base) + interval * 1000 : Date.now())).toISOString() : null
     return { auto_collect: settings.auto_collect, scheduler_active: !!this.timer && process.env.PORTAL_AUTOMATION_DISABLED !== "1", interval_seconds: config.interval_seconds, retry_seconds: settings.retry_seconds, next_run_at: next,
       next_body_run_at: nextBody, body_backfill: await bodyBackfillStatus(undefined, this.root),
-      jobs: jobs.slice(0, 10).map(({ pid: _pid, ...job }) => job), configured_sources: config.sources.map(({ id, name, enabled = true, kind, url }: Row) => ({ id, name, enabled, kind, url })) }
+      jobs: jobs.slice(0, 10).map(({ pid: _pid, start_ticks: _ticks, ...job }) => job), configured_sources: config.sources.map(({ id, name, enabled = true, kind, url }: Row) => ({ id, name, enabled, kind, url })) }
   }
   async tick() {
     if (process.env.PORTAL_AUTOMATION_DISABLED === "1") return

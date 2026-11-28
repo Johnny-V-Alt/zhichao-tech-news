@@ -126,6 +126,42 @@ class BodyQueue:
                      and self.sources[r["source_id"]].get("enabled", True)
                      and self.sources[r["source_id"]].get("read_body", False)), None)
 
+    @staticmethod
+    def priority(article, manual_images=False):
+        # Freshness takes precedence over the old text/summary/full-text tiers.
+        # Missing dates remain unknown; observation time is never a news date.
+        if manual_images:
+            return 2 ** 52
+        published = article.get("published_at")
+        if not published:
+            return 0
+        try:
+            date = datetime.fromisoformat(published + "T00:00:00+08:00" if len(published) == 10 else published)
+            stamp = int(date.timestamp())
+            return max(0, stamp) if stamp <= time.time() + 300 else 0
+        except (ValueError, TypeError, OverflowError):
+            return 0
+
+    def reprioritize_pending(self, articles):
+        # Huey persists priority in its serialized task and SQLite queue. Replay
+        # only pending tasks via its native APIs, preserving IDs/retry counters.
+        # The caller holds worker_lock. If interrupted, reconcile recreates any
+        # missing task from the durable article/state library on the next run.
+        pending = list(self.huey.pending())
+        changed = False
+        for task in pending:
+            aid = task.args[0]
+            if aid not in articles:
+                continue
+            priority = self.priority(articles[aid], self.state(aid).get("retry_images", False))
+            if task.priority != priority:
+                task.priority = priority
+                changed = True
+        if changed:
+            self.huey.storage.flush_queue()
+            for task in pending:
+                self.huey.enqueue(task)
+
     def reconcile(self, retry_failed=False, only=None):
         """Rescan the durable content library, including articles off the feeds.
 
@@ -165,12 +201,14 @@ class BodyQueue:
                 continue
             if state.get("state") in {"failed", "blocked"} and not retry_failed:
                 continue
-            signature = self.task.s(aid, priority=300 if retry_images else 200 if article["content_status"] == "full_text" else 100 if not article.get("content_text") else 20)
+            signature = self.task.s(aid, priority=self.priority(article, retry_images))
             # State before enqueue makes a crash here recoverable on next scan.
             self.save(aid, state="queued", task_id=signature.id, source_id=source["id"],
                       attempts=state.get("attempts", 0), retry_images=retry_images, next_retry_at=None,
                       error=None, queued_at=now())
             self.huey.enqueue(signature)
+        if self.policy["enabled"]:
+            self.reprioritize_pending({row["id"]: row for row in rows})
 
     def fetch(self, article_id, task=None):
         article, links = self.record(article_id)
@@ -244,6 +282,9 @@ class BodyQueue:
 
     def drain(self, budget):
         for task in self.huey.read_schedule():
+            article, _ = self.record(task.args[0])
+            if article:
+                task.priority = self.priority(article, self.state(task.args[0]).get("retry_images", False))
             self.huey.enqueue(task)
         processed = 0
         for _ in range(max(0, budget)):
